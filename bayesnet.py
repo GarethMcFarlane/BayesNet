@@ -13,22 +13,47 @@ class Node:
         self.parent = []
         self.child = []
 
+    ### NEW
+    def checkchild(self, checkname):
+        for c in self.child:
+            if c.name == checkname:
+                return True
+        return False
+
+    def checkparnt(self, checkname):
+        for p in self.parent:
+            if p.name == checkname:
+                return True
+        return False
+
+
+    ### END NEW
+
     def addchild(self, c):
-        self.child.append(c)
+        # NEW
+        if self.checkchild(c.name) is False:
+            self.child.append(c)
+            return True
+        return False
+
 
     def addparnt(self, p):
-        self.parent.append(p)
+        # NEW
+        if self.checkparnt(p.name) is False:
+            self.parent.append(p)
+            return True
+        return False
 
-    def remchild(self, c):
+    def remchild(self, name):
         for c in self.child:
-            if c.name == c:
+            if c.name == name:
                 self.child.remove(c)
                 return True
         return False
 
-    def remparnt(self, p):
+    def remparnt(self, name):
         for p in self.parent:
-            if p.name == p:
+            if p.name == name:
                 self.parent.remove(p)
                 return True
         return False
@@ -52,16 +77,30 @@ class Node:
         return True
 
     def setcondprobs(self, probs):
-        if not 'prob' in probs: return False
+        if 'prob' not in probs:
+            return False
         if not self.parent:
             self.probabilities = {'prob':float(probs['prob'])}
             return True
 
         id = ""
-        for p in self.parent:
-            id = id + str(probs[p.name])
+        #NEW
+        try:
+            for p in self.parent:
+                id += str(probs[p.name])
+        except Exception:
+            return False
+
         self.probabilities[id] = float(probs['prob'])
         return True
+
+    #NEW
+    def checkallprobsinit(self):
+        for id in self.probabilities:
+            if self.probabilities[id] == None:
+                return False
+        return True
+
 
 
 class BayesNet:
@@ -74,7 +113,7 @@ class BayesNet:
         for i in self.nodes:
             net.addnode(i.name)
         for j in self.nodes:
-            for c in j.children:
+            for c in j.child:
                 net.connection(j.name, c.name)
         for k in self.nodes:
             net.getnode(k.name).probabilities = copy.deepcopy(k.probabilities)
@@ -82,7 +121,9 @@ class BayesNet:
         return net
 
     def topsort(self):
+        #NEW
         sorted = []
+        final = []
         net = self.clonenet()
 
         rootnode = net.getrootnode()
@@ -95,13 +136,24 @@ class BayesNet:
                 net.disconnection(scratchnode.name, child.name)
                 if not child.parent:
                     rootnode.append(child)
-        final = []
+        if (net.checkconnections() == True):
+            return False
         for node in sorted:
             final.append(self.getnode(node.name))
         return final
 
+    # NEW
+    def checkcycles(self):
+        if (self.topsort() == False):
+            return True
+        return False
+
     def addnode(self, nodename):
-        self.nodes.append(Node(nodename))
+        if self.checkexists(nodename) is False:
+            scatchnode = Node(nodename)
+            self.nodes.append(scatchnode)
+            return scatchnode
+        return False
 
     def getnode(self, nodename):
         for i in self.nodes:
@@ -109,18 +161,35 @@ class BayesNet:
                 return i
         return False
 
+    #NEW
+    def checkexists(self,name):
+        for n in self.nodes:
+            if n.name == name:
+                return True
+        return False
+
+    def getallnodes(self):
+        return self.nodes
+
     def getrootnode(self):
         rootarr = []
         for n in self.nodes:
-            if not n.parents:
+            if not n.parent:
                 rootarr.append(n)
         return rootarr
+
+    #NEW
+    def checkconnections(self):
+        for n in self.nodes:
+            if n.parent or n.child:
+                return True
+        return False
 
     def connection(self, parentnode, childnode):
         parent = self.getnode(parentnode)
         child = self.getnode(childnode)
 
-        if (parent, child) is not False:
+        if (parent and child):
             parent.addchild(child)
             child.addparnt(parent)
             return True
@@ -130,9 +199,9 @@ class BayesNet:
         parent = self.getnode(parentnode)
         child = self.getnode(childnode)
 
-        if (parent, child) is not False:
-            parent.remparnt(parent)
-            child.remchild(child)
+        if (parent and child):
+            parent.remchild(childnode)
+            child.remparnt(parentnode)
             return True
         return False
 
@@ -144,31 +213,22 @@ class BayesNet:
     def addprobs(self, nodename, probs):
         return self.getnode(nodename).setcondprobs(probs)
 
+    #NEW
+    def checkprobsinit(self):
+        for node in self.nodes:
+            if not node.checkallprobsinit():
+                return False
+        return True
+
     def getweight(self, nodes, evidence, outcome):
         resarray = {}
         initweight = 1.0
         good = True
 
         for n in nodes:
-            if len(n.probabilities) is not 1:
-                id = ""
-                for p in n.parents:
-                    id = id+str(resarray[p.name])
+            if len(n.probabilities) == 1:
                 if n.name in evidence:
-                    if evidence[n.name] is 1:
-                        resarray[n.name] = 1
-                        initweight = initweight * n.probabilities[id]
-                    else:
-                        resarray[n.name] = 0
-                        initweight = initweight * (1 - n.probabilities[id])
-                else:
-                    if (random.random() <= n.probabilities[id]):
-                        resarray[n.name] = 1
-                    else:
-                        resarray[n.name] = 0
-            else:
-                if n.name in evidence:
-                    if evidence[n.name] is 1:
+                    if evidence[n.name] == 1:
                         resarray[n.name] = 1
                         initweight = initweight * n.probabilities['prob']
                     else:
@@ -180,15 +240,37 @@ class BayesNet:
                         resarray[n.name] = 1
                     else:
                         resarray[n.name] = 0
+            else:
+                id = ""
+                for p in n.parent:
+                    id = id+str(resarray[p.name])
+                if n.name in evidence:
+                    if evidence[n.name] == 1:
+                        resarray[n.name] = 1
+                        initweight = initweight * n.probabilities[id]
+                    else:
+                        resarray[n.name] = 0
+                        initweight = initweight * (1 - n.probabilities[id])
+                else:
+                    if (random.random() <= n.probabilities[id]):
+                        resarray[n.name] = 1
+                    else:
+                        resarray[n.name] = 0
 
-            if ((good is True) and (n.name in outcome)):
+            if ((good == True) and (n.name in outcome)):
                 if (outcome[n.name] != resarray[n.name]):
                     good = False
 
         return good, initweight
 
     def likelihoodweighting(self, evidence, outcome, samplenum):
+        if not self.checkprobsinit():
+            return False
+
         sorted = self.topsort()
+
+        if (sorted == False):
+            return False
 
         totalweight = 0.0
         condweight = 0.0001
@@ -197,50 +279,17 @@ class BayesNet:
             totalweight += initweight
             if good:
                 condweight = condweight + initweight
-        return  (condweight/totalweight)
+        return (condweight/totalweight)
 
 
-class LikelihoodWeighting:
+def run_likelihood(network,evidence,outcome,num,numruns):
+    results = []
+    for x in xrange(0,numruns):
+        results.append(network.likelihoodweighting(evidence, outcome, num))
+    mean = np.mean(results)
+    variance = np.var(results)
+    print('%f %f' % (mean, variance))
 
-    cloudyday = BayesNet()
-    resarray = []
-    evidence = {}
-    outcome = {}
-
-    def __init__(self):
-        # Init nodes
-        cloudy = self.cloudyday.addnode("cloudy")
-        sprinkler = self.cloudyday.addnode("sprinkler")
-        rain = self.cloudyday.addnode("rain")
-        wetgrass = self.cloudyday.addnode("wetgrass")
-
-        # Connect nodes
-        self.cloudyday.connection(cloudy.name, sprinkler.name)
-        self.cloudyday.connection(cloudy.name, rain.name)
-        self.cloudyday.connection(sprinkler.name, wetgrass.name)
-        self.cloudyday.connection(rain.name, wetgrass.name)
-
-        # Initialise empty arrays
-        self.cloudyday.initprobsnew()
-
-        # Initialise probabilities
-
-        self.cloudyday.addprobs("cloudy", {'prob': 0.5})
-
-        self.cloudyday.addprobs("sprinkler", {'cloudy': 1, 'prob': 0.1})
-        self.cloudyday.addprobs("sprinkler", {'cloudy': 0, 'prob': 0.5})
-
-        self.cloudyday.addprobs("rain", {'cloudy': 1, 'prob': 0.8})
-        self.cloudyday.addprobs("rain", {'cloudy': 0, 'prob': 0.2})
-
-        self.cloudyday.addprobs("wetgrass", {'sprinkler': 1, 'rain': 1, 'prob': 0.99})
-        self.cloudyday.addprobs("wetgrass", {'sprinkler': 1, 'rain': 0, 'prob': 0.90})
-        self.cloudyday.addprobs("wetgrass", {'sprinkler': 0, 'rain': 1, 'prob': 0.90})
-        self.cloudyday.addprobs("wetgrass", {'sprinkler': 0, 'rain': 0, 'prob': 0.00})
-
-        # Assign evidence and outcome according to assignment
-        self.evidence = {"sprinkler": 1, "wetgrass": 1}
-        self.outcome = {"cloudy": 1}
 
 def main(argv):
     # Checking for correct input
@@ -255,13 +304,45 @@ def main(argv):
     numsamples = int(argv[1])
     numruns = int(argv[2])
 
-    for x in xrange(0, numruns):
-        LikelihoodWeighting.resarray.append(LikelihoodWeighting.cloudyday.likelihoodweighting(LikelihoodWeighting.evidence, LikelihoodWeighting.outcome, numsamples))
+    cloudyday = BayesNet()
 
-    mean = np.mean(LikelihoodWeighting.resarray)
-    var = np.var(LikelihoodWeighting.resarray)
+    # Init nodes
+    cloudy = cloudyday.addnode("cloudy")
+    sprinkler = cloudyday.addnode("sprinkler")
+    rain = cloudyday.addnode("rain")
+    wetgrass = cloudyday.addnode("wetgrass")
 
-    print('%d %d' % (mean, var))
+    # Connect nodes
+    cloudyday.connection(cloudy.name, sprinkler.name)
+    cloudyday.connection(cloudy.name, rain.name)
+    cloudyday.connection(sprinkler.name, wetgrass.name)
+    cloudyday.connection(rain.name, wetgrass.name)
+
+    # Initialise empty arrays
+    cloudyday.initprobsnew()
+
+    # Initialise probabilities
+
+    cloudyday.addprobs("cloudy", {'prob': 0.5})
+
+    cloudyday.addprobs("sprinkler", {'cloudy': 1, 'prob': 0.1})
+    cloudyday.addprobs("sprinkler", {'cloudy': 0, 'prob': 0.5})
+
+    cloudyday.addprobs("rain", {'cloudy': 1, 'prob': 0.8})
+    cloudyday.addprobs("rain", {'cloudy': 0, 'prob': 0.2})
+
+    cloudyday.addprobs("wetgrass", {'sprinkler': 1, 'rain': 1, 'prob': 0.99})
+    cloudyday.addprobs("wetgrass", {'sprinkler': 1, 'rain': 0, 'prob': 0.90})
+    cloudyday.addprobs("wetgrass", {'sprinkler': 0, 'rain': 1, 'prob': 0.90})
+    cloudyday.addprobs("wetgrass", {'sprinkler': 0, 'rain': 0, 'prob': 0.00})
+
+    # Assign evidence and outcome according to assignment
+    evidence = {"sprinkler": 1, "wetgrass": 1}
+    outcome = {"cloudy": 1}
+
+    run_likelihood(cloudyday, evidence, outcome, numsamples, numruns)
+
+
 
 if __name__ == "__main__":
     main(sys.argv)
