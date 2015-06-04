@@ -19,4 +19,4 @@ Requirements
 Usage
 -----
 * Ensure bayesnet.py is executable (chmod +x on Unix systems)
-* Run ./bayesnet.py <number of samples> <number of runs>
+* Run ./bayesnet.py &lt; number of samples &rt; &lt; number of runs &rt;
