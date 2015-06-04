@@ -1,4 +1,4 @@
-__authors__ = 'Gareth McFarlane, Yoshi Hemzal'
+__authors__ = 'Yoshi Hemzal, Gareth McFarlane'
 
 import sys
 import itertools
@@ -6,6 +6,8 @@ import copy
 import random
 import numpy as np
 
+
+# Definition of the Node class, with name, probabilities, parent and child variables.
 class Node:
     def __init__(self, name):
         self.name = name
@@ -13,61 +15,35 @@ class Node:
         self.parent = []
         self.child = []
 
-    ### NEW
-    def checkchild(self, checkname):
-        for c in self.child:
-            if c.name == checkname:
-                return True
-        return False
-
-    def checkparnt(self, checkname):
-        for p in self.parent:
-            if p.name == checkname:
-                return True
-        return False
-
-
-    ### END NEW
-
+    # Add a child to the node
     def addchild(self, c):
-        # NEW
-        if self.checkchild(c.name) is False:
-            self.child.append(c)
-            return True
-        return False
+        self.child.append(c)
 
-
+    # Add a parent to the node
     def addparnt(self, p):
-        # NEW
-        if self.checkparnt(p.name) is False:
-            self.parent.append(p)
-            return True
-        return False
+        self.parent.append(p)
 
-    def remchild(self, name):
+    # Remove a child from a node by name
+    def delchild(self, name):
         for c in self.child:
-            if c.name == name:
+            if c.name is name:
                 self.child.remove(c)
                 return True
         return False
 
-    def remparnt(self, name):
+    # Remove a parent in a node by name
+    def delparnt(self, name):
         for p in self.parent:
-            if p.name == name:
+            if p.name is name:
                 self.parent.remove(p)
                 return True
         return False
 
-    def getchildren(self):
-        return self.child
-
-    def getparents(self):
-        return self.parent
-
+    # Initialise probability tables to have a size relative to the number of parents a node has
     def initprobs(self):
         totalparents = len(self.parent)
         if totalparents is 0:
-            self.probabilities = {'prob':None}
+            self.probabilities = {'prob': None}
             return True
 
         totalcombinations = map(''.join, itertools.product("10", repeat=totalparents))
@@ -76,38 +52,34 @@ class Node:
             self.probabilities[t] = None
         return True
 
+    # Check if probabilities have been initialised. If not, return false.
+    def checkprobsinit(self):
+        for id in self.probabilities:
+            if self.probabilities[id] is None:
+                return False
+        return True
+
+    # Set conditional probabilities for a node
     def setcondprobs(self, probs):
         if 'prob' not in probs:
             return False
         if not self.parent:
-            self.probabilities = {'prob':float(probs['prob'])}
+            self.probabilities = {'prob': float(probs['prob'])}
             return True
 
         id = ""
-        #NEW
-        try:
-            for p in self.parent:
-                id += str(probs[p.name])
-        except Exception:
-            return False
-
+        for p in self.parent:
+            id += str(probs[p.name])
         self.probabilities[id] = float(probs['prob'])
         return True
 
-    #NEW
-    def checkallprobsinit(self):
-        for id in self.probabilities:
-            if self.probabilities[id] == None:
-                return False
-        return True
-
-
-
+# Definition of the Bayesian Network class, with Nodes and Probability variables
 class BayesNet:
     def __init__(self):
         self.nodes = []
         self.probs = []
 
+    # Make an exact copy of a network for sorting purposes
     def clonenet(self):
         net = BayesNet()
         for i in self.nodes:
@@ -120,8 +92,9 @@ class BayesNet:
 
         return net
 
+    # Topological sort of a network. Sorting ensures requirements for calculated weights are met i.e. no errors in
+    # probabilities.
     def topsort(self):
-        #NEW
         sorted = []
         final = []
         net = self.clonenet()
@@ -136,18 +109,13 @@ class BayesNet:
                 net.disconnection(scratchnode.name, child.name)
                 if not child.parent:
                     rootnode.append(child)
-        if (net.checkconnections() == True):
+        if net.checkconnections() is True:
             return False
         for node in sorted:
             final.append(self.getnode(node.name))
         return final
 
-    # NEW
-    def checkcycles(self):
-        if (self.topsort() == False):
-            return True
-        return False
-
+    # Add a node to the network, by name.
     def addnode(self, nodename):
         if self.checkexists(nodename) is False:
             scatchnode = Node(nodename)
@@ -155,22 +123,21 @@ class BayesNet:
             return scatchnode
         return False
 
+    # Returns a node matching the name requested (if no match, return false).
     def getnode(self, nodename):
         for i in self.nodes:
             if i.name is nodename:
                 return i
         return False
 
-    #NEW
-    def checkexists(self,name):
+    # Check if a node already exists to avoid duplicating
+    def checkexists(self, name):
         for n in self.nodes:
-            if n.name == name:
+            if n.name is name:
                 return True
         return False
 
-    def getallnodes(self):
-        return self.nodes
-
+    # Gets the root node of a network
     def getrootnode(self):
         rootarr = []
         for n in self.nodes:
@@ -178,47 +145,56 @@ class BayesNet:
                 rootarr.append(n)
         return rootarr
 
-    #NEW
+    # Checks if a node is a parent or child. Any node in a Bayesian network must have at least on of these.
     def checkconnections(self):
         for n in self.nodes:
             if n.parent or n.child:
                 return True
         return False
 
+    # Connects two nodes (specified by parent and child)
     def connection(self, parentnode, childnode):
         parent = self.getnode(parentnode)
         child = self.getnode(childnode)
 
-        if (parent and child):
+        if (parent, child) is not False:
             parent.addchild(child)
             child.addparnt(parent)
             return True
         return False
 
+    # Disconnects two nodes (specified by parent and child)
     def disconnection(self, parentnode, childnode):
         parent = self.getnode(parentnode)
         child = self.getnode(childnode)
 
-        if (parent and child):
-            parent.remchild(childnode)
-            child.remparnt(parentnode)
+        if (parent, child) is not False:
+            parent.delchild(childnode)
+            child.delparnt(parentnode)
             return True
         return False
 
+    # Initialises empty probabilities for a new node.
     def initprobsnew(self):
         for node in self.nodes:
             node.initprobs()
         return True
 
+    # Checks if probabilities have been successfully initialised.
+    def checkprobsinit(self):
+        for node in self.nodes:
+            if not node.checkprobsinit():
+                return False
+        return True
+
+    # Adds probabilities to a requested node.
     def addprobs(self, nodename, probs):
         return self.getnode(nodename).setcondprobs(probs)
 
-    #NEW
-    def checkprobsinit(self):
-        for node in self.nodes:
-            if not node.checkallprobsinit():
-                return False
-        return True
+    # Calculates sample weight. Initial weight is 1. Multiplies weight based on node probabilities. Uses random.random
+    # to determine the outcome of nodes that are not fixed. For every node, we check if the outcome passes the
+    # requisites of the fixed nodes. Basic sorting allows for correct probability weighting. This represents one run of
+    # the "sample".
 
     def getweight(self, nodes, evidence, outcome):
         resarray = {}
@@ -226,70 +202,68 @@ class BayesNet:
         good = True
 
         for n in nodes:
-            if len(n.probabilities) == 1:
+            if len(n.probabilities) is 1:
                 if n.name in evidence:
-                    if evidence[n.name] == 1:
+                    if evidence[n.name] is 1:
                         resarray[n.name] = 1
-                        initweight = initweight * n.probabilities['prob']
+                        initweight *= n.probabilities['prob']
                     else:
                         resarray[n.name] = 0
-                        initweight = initweight * (1.0 - n.probabilities['prob'])
+                        initweight *= 1.0 - n.probabilities['prob']
 
                 else:
-                    if (random.random() <= n.probabilities['prob']):
+                    if n.probabilities['prob'] >= random.random():
                         resarray[n.name] = 1
                     else:
                         resarray[n.name] = 0
             else:
                 id = ""
                 for p in n.parent:
-                    id = id+str(resarray[p.name])
+                    id += str(resarray[p.name])
                 if n.name in evidence:
-                    if evidence[n.name] == 1:
+                    if evidence[n.name] is 1:
                         resarray[n.name] = 1
-                        initweight = initweight * n.probabilities[id]
+                        initweight *= n.probabilities[id]
                     else:
                         resarray[n.name] = 0
-                        initweight = initweight * (1 - n.probabilities[id])
+                        initweight *= 1 - n.probabilities[id]
                 else:
-                    if (random.random() <= n.probabilities[id]):
+                    if n.probabilities[id] >= random.random():
                         resarray[n.name] = 1
                     else:
                         resarray[n.name] = 0
 
-            if ((good == True) and (n.name in outcome)):
-                if (outcome[n.name] != resarray[n.name]):
+            if good and (n.name in outcome):
+                if outcome[n.name] != resarray[n.name]:
                     good = False
 
         return good, initweight
 
+    # Likelihood weighting, run as many times as is requested.
     def likelihoodweighting(self, evidence, outcome, samplenum):
         if not self.checkprobsinit():
             return False
 
         sorted = self.topsort()
 
-        if (sorted == False):
+        if sorted is False:
             return False
 
+        # Totalweight, initially set to 0. Conditional weight is set to a very small initial number to avoid
+        # later errors in the main method (division by zero).
         totalweight = 0.0
         condweight = 0.0001
+
+        # Run for as many samples are requested.
         for x in xrange(0, samplenum):
             good, initweight = self.getweight(sorted, evidence, outcome)
             totalweight += initweight
             if good:
-                condweight = condweight + initweight
-        return (condweight/totalweight)
+                condweight += initweight
+        return condweight / totalweight
 
-
-def run_likelihood(network,evidence,outcome,num,numruns):
-    results = []
-    for x in xrange(0,numruns):
-        results.append(network.likelihoodweighting(evidence, outcome, num))
-    mean = np.mean(results)
-    variance = np.var(results)
-    print('%f %f' % (mean, variance))
-
+# Main method using the classes above. Takes 2 arguments (integers) and returns
+# mean and variance of the posterior estimate for m samples and n runs.
 
 def main(argv):
     # Checking for correct input
@@ -340,9 +314,19 @@ def main(argv):
     evidence = {"sprinkler": 1, "wetgrass": 1}
     outcome = {"cloudy": 1}
 
-    run_likelihood(cloudyday, evidence, outcome, numsamples, numruns)
+    # Create array with resulting probabilities
+    results = []
 
+    # Run the network for as many runs as specified, with as many samples as specified
+    for x in xrange(0, numruns):
+        results.append(cloudyday.likelihoodweighting(evidence, outcome, numsamples))
 
+    # Use numpy to quickly get results
+    mean = np.mean(results)
+    variance = np.var(results)
+
+    # Print results
+    print('%f %f' % (mean, variance))
 
 if __name__ == "__main__":
     main(sys.argv)
